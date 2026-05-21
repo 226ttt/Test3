@@ -1,0 +1,557 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>8-Bit Tank Battle VS BOT</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+        
+        body {
+            background-color: #111;
+            color: #fff;
+            font-family: 'Press Start 2P', cursive;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+            color: #00ff00;
+            text-shadow: 3px 3px #005500;
+        }
+
+        #menu {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            background: #222;
+            padding: 30px;
+            border: 4px solid #fff;
+            box-shadow: 0 0 20px rgba(0,255,0,0.2);
+        }
+
+        button {
+            font-family: 'Press Start 2P', cursive;
+            font-size: 14px;
+            padding: 12px 24px;
+            border: 4px solid #fff;
+            background: #000;
+            color: #fff;
+            cursor: pointer;
+            width: 200px;
+            transition: 0.1s;
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+        }
+
+        button.hard-mode {
+            color: #ff0000;
+            border-color: #ff0000;
+        }
+        button.hard-mode:hover {
+            background: #ff0000;
+            color: #000;
+        }
+
+        #game-container {
+            display: none;
+            position: relative;
+        }
+
+        canvas {
+            background: #000;
+            border: 6px solid #555;
+            box-shadow: 0 0 30px rgba(255,255,255,0.1);
+        }
+
+        #ui {
+            display: flex;
+            justify-content: space-between;
+            width: 600px;
+            margin-bottom: 10px;
+            font-size: 12px;
+        }
+
+        .controls-hint {
+            margin-top: 15px;
+            font-size: 10px;
+            color: #888;
+            text-align: center;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+
+    <h1>TANK 8-BIT</h1>
+
+    <!-- หน้าเมนูเลือกโหมด -->
+    <div id="menu">
+        <p style="margin-top:0; font-size:14px; color:#aaa;">CHOOSE DIFFICULTY</p>
+        <button onclick="startGame('easy')">EASY</button>
+        <button onclick="startGame('normal')">NORMAL</button>
+        <button class="hard-mode" onclick="startGame('hard')">HARD (IMPOSSIBLE)</button>
+    </div>
+
+    <!-- ส่วนแสดงผลเกม -->
+    <div id="game-container">
+        <div id="ui">
+            <div id="player-hp">PLAYER: HP 3</div>
+            <div id="mode-text" style="color: #ff0000;"></div>
+            <div id="bot-hp">BOT: HP 3</div>
+        </div>
+        <canvas id="gameCanvas" width="600" height="500"></canvas>
+        <div class="controls-hint">
+            [W,A,S,D] or [Arrow Keys] to Move<br>
+            [SPACEBAR] to Fire
+        </div>
+    </div>
+
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        
+        // ตั้งค่าเสียงแบบ 8-bit โดยใช้ Web Audio API (ไม่ต้องโหลดไฟล์เสียงภายนอก)
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(type) {
+            if (!audioCtx) return;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+
+            if (type === 'shoot') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(300, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.1);
+            } else if (type === 'hit') {
+                osc.type = 'square';
+                osc.frequency.setValueAtTime(100, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(10, audioCtx.currentTime + 0.2);
+                gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.2);
+            } else if (type === 'gameover') {
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(150, audioCtx.currentTime);
+                osc.frequency.linearRampToValueAtTime(30, audioCtx.currentTime + 0.5);
+                gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                osc.start(); osc.stop(audioCtx.currentTime + 0.5);
+            }
+        }
+
+        // ตัวแปรระบบเกม
+        let gameInterval;
+        let currentMode = 'easy';
+        let keys = {};
+        let bullets = [];
+        let particles = [];
+
+        // สิ่งกีดขวาง (พิกัดและขนาด)
+        const obstacles = [
+            {x: 120, y: 120, w: 60, h: 60},
+            {x: 420, y: 120, w: 60, h: 60},
+            {x: 260, y: 220, w: 80, h: 60},
+            {x: 120, y: 320, w: 60, h: 60},
+            {x: 420, y: 320, w: 60, h: 60}
+        ];
+
+        // ออบเจกต์รถถัง
+        let player = {
+            x: 50, y: 220, size: 32, speed: 3, angle: 0, hp: 3, lastShot: 0, cooldown: 400,
+            color: '#00ff00', trackColor: '#008800'
+        };
+
+        let bot = {
+            x: 510, y: 220, size: 32, speed: 2, angle: 180, hp: 3, lastShot: 0, cooldown: 1000,
+            color: '#ff3333', trackColor: '#880000', lastDirChange: 0, targetDir: {x:0, y:0}
+        };
+
+        // เริ่มเกม
+        function startGame(mode) {
+            currentMode = mode;
+            document.getElementById('menu').style.display = 'none';
+            document.getElementById('game-container').style.display = 'block';
+            
+            // ปรับระดับความยากของบอท
+            if (mode === 'easy') {
+                bot.hp = 3; bot.speed = 2; bot.cooldown = 1200;
+                document.getElementById('mode-text').innerText = "MODE: EASY";
+                document.getElementById('mode-text').style.color = "#00ff00";
+            } else if (mode === 'normal') {
+                bot.hp = 4; bot.speed = 2.5; bot.cooldown = 800;
+                document.getElementById('mode-text').innerText = "MODE: NORMAL";
+                document.getElementById('mode-text').style.color = "#ffff00";
+            } else if (mode === 'hard') {
+                // โหมดยากแบบไม่มีทางชนะ: เลือดเยอะ, เคลื่อนที่ไว, คูลดาวน์ยิงแทบไม่มี, ความสามารถพิเศษเปิดใช้งานในลูปคำนวณ
+                bot.hp = 10; 
+                bot.speed = 4.5; 
+                bot.cooldown = 150; 
+                document.getElementById('mode-text').innerText = "MODE: IMPOSSIBLE";
+                document.getElementById('mode-text').style.color = "#ff0000";
+            }
+
+            // Reset สถานะ
+            player.hp = 3; player.x = 50; player.y = 220; player.angle = 0;
+            bot.x = 510; bot.y = 220; bot.angle = 180;
+            bullets = []; particles = [];
+            updateUI();
+
+            // ฟังค์ชันปุ่มกด
+            window.addEventListener('keydown', handleKeyDown);
+            window.addEventListener('keyup', handleKeyUp);
+
+            // เริ่มลูปเกม
+            if (gameInterval) clearInterval(gameInterval);
+            gameInterval = setInterval(gameLoop, 1000 / 60);
+        }
+
+        function handleKeyDown(e) {
+            keys[e.code] = true;
+            if (e.code === 'Space') {
+                e.preventDefault();
+                shoot(player);
+            }
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'].includes(e.code)) {
+                e.preventDefault(); // ป้องกันหน้าจอเลื่อนซ้ายขวาบนล่าง
+            }
+        }
+        function handleKeyUp(e) { keys[e.code] = false; }
+
+        function updateUI() {
+            document.getElementById('player-hp').innerText = `PLAYER: HP ${player.hp}`;
+            document.getElementById('bot-hp').innerText = `BOT: HP ${bot.hp}`;
+        }
+
+        // ฟังค์ชันยิงกระสุน
+        function shoot(tank) {
+            let now = Date.now();
+            if (now - tank.lastShot < tank.cooldown) return;
+            
+            let rad = (tank.angle * Math.PI) / 180;
+            let bSpeed = currentMode === 'hard' && tank === bot ? 9 : 6; // บอทโหมดยากกระสุนจะเร็วมาก
+            
+            bullets.push({
+                x: tank.x + tank.size/2 + Math.cos(rad) * (tank.size/2),
+                y: tank.y + tank.size/2 + Math.sin(rad) * (tank.size/2),
+                vx: Math.cos(rad) * bSpeed,
+                vy: Math.sin(rad) * bSpeed,
+                owner: tank
+            });
+            
+            tank.lastShot = now;
+            playSound('shoot');
+        }
+
+        // ตรวจสอบการชนสิ่งกีดขวาง/ขอบฉาก
+        function checkCollision(x, y, size, isBot=false) {
+            if (x < 0 || x + size > canvas.width || y < 0 || y + size > canvas.height) return true;
+            
+            for (let obs of obstacles) {
+                if (x < obs.x + obs.w && x + size > obs.x && y < obs.y + obs.h && y + size > obs.y) {
+                    return true;
+                }
+            }
+            
+            // ตรวจสอบชนกันเองระหว่างรถถัง
+            if (isBot) {
+                if (x < player.x + player.size && x + size > player.x && y < player.y + player.size && y + size > player.y) return true;
+            } else {
+                if (x < bot.x + bot.size && x + size > bot.x && y < bot.y + bot.size && y + size > bot.y) return true;
+            }
+
+            return false;
+        }
+
+        // เอฟเฟกต์ระเบิดแบบพิกเซล 8-bit
+        function createExplosion(x, y, color) {
+            for (let i = 0; i < 12; i++) {
+                particles.push({
+                    x: x, y: y,
+                    vx: (Math.random() - 0.5) * 4,
+                    vy: (Math.random() - 0.5) * 4,
+                    size: Math.random() * 4 + 2,
+                    life: 20,
+                    color: color
+                });
+            }
+        }
+
+        // ส่วนควบคุม AI ของบอท
+        function updateBot() {
+            let now = Date.now();
+            
+            let pCenterX = player.x + player.size/2;
+            let pCenterY = player.y + player.size/2;
+            let bCenterX = bot.x + bot.size/2;
+            let bCenterY = bot.y + bot.size/2;
+
+            // --- ความสามารถพิเศษของโหมดยาก: หลบกระสุนอัตโนมัติ (Auto-Evade) ---
+            if (currentMode === 'hard') {
+                for (let b of bullets) {
+                    if (b.owner === player) {
+                        // ถ้ามีกระสุนผู้เล่นวิ่งเข้ามาใกล้ในระยะ บอทจะโยกหลบทันที
+                        let dist = Math.hypot(b.x - bCenterX, b.y - bCenterY);
+                        if (dist < 120) {
+                            let escapeX = bot.x + (b.vy * 1.5); // เดินฉากหลบแนววิถีกระสุน
+                            let escapeY = bot.y - (b.vx * 1.5);
+                            if (!checkCollision(escapeX, escapeY, bot.size, true)) {
+                                bot.x = escapeX;
+                                bot.y = escapeY;
+                            }
+                        }
+                    }
+                }
+            }
+
+            // การเดินของบอท
+            if (now - bot.lastDirChange > (currentMode === 'hard' ? 200 : 800)) {
+                // โหมดยากจะเปลี่ยนทิศทางเข้าหาผู้เล่นไวขึ้นมาก
+                bot.lastDirChange = now;
+                
+                if (Math.random() < 0.7 || currentMode === 'hard') {
+                    // เดินเข้าหาผู้เล่น
+                    let diffX = pCenterX - bCenterX;
+                    let diffY = pCenterY - bCenterY;
+                    if (Math.abs(diffX) > Math.abs(diffY)) {
+                        bot.targetDir = { x: Math.sign(diffX), y: 0 };
+                    } else {
+                        bot.targetDir = { x: 0, y: Math.sign(diffY) };
+                    }
+                } else {
+                    // เดินสุ่มทั่วไป
+                    let r = Math.random();
+                    if (r < 0.25) bot.targetDir = {x:1, y:0};
+                    else if (r < 0.5) bot.targetDir = {x:-1, y:0};
+                    else if (r < 0.75) bot.targetDir = {x:0, y:1};
+                    else bot.targetDir = {x:0, y:-1};
+                }
+            }
+
+            // ขยับตัวบอท
+            let nextX = bot.x + bot.targetDir.x * bot.speed;
+            let nextY = bot.y + bot.targetDir.y * bot.speed;
+            
+            if (!checkCollision(nextX, nextY, bot.size, true)) {
+                bot.x = nextX;
+                bot.y = nextY;
+                // ตั้งมุมของรถถังตามทิศที่เดิน
+                if (bot.targetDir.x === 1) bot.angle = 0;
+                if (bot.targetDir.x === -1) bot.angle = 180;
+                if (bot.targetDir.y === 1) bot.angle = 90;
+                if (bot.targetDir.y === -1) bot.angle = 270;
+            } else {
+                bot.lastDirChange = 0; // ถ้าชน ให้เปลี่ยนทิศทางทันที
+            }
+
+            // --- ระบบการยิงของบอท ---
+            // ตรวจสอบว่าอยู่ในเส้นเล็งหรือไม่
+            let inSight = false;
+            let targetAngle = bot.angle;
+
+            // โหมดยาก: ระบบเล็งล่วงหน้าขั้นเทพ (Prediction Aim)
+            if (currentMode === 'hard') {
+                let pVx = 0, pVy = 0;
+                if (keys['KeyA'] || keys['ArrowLeft']) pVx = -player.speed;
+                if (keys['KeyD'] || keys['ArrowRight']) pVx = player.speed;
+                if (keys['KeyW'] || keys['ArrowUp']) pVy = -player.speed;
+                if (keys['KeyS'] || keys['ArrowDown']) pVy = player.speed;
+
+                // คำนวณตำแหน่งที่คาดว่าผู้เล่นจะเดินไปในอีก 15 เฟรมข้างหน้า
+                let predX = pCenterX + pVx * 15;
+                let predY = pCenterY + pVy * 15;
+
+                let diffX = predX - bCenterX;
+                let diffY = predY - bCenterY;
+
+                // บอทโหมดยากจะหมุนตัวยิงดักได้ทุกทิศทางทันที ไม่สนทิศทางการเดิน
+                if (Math.abs(diffX) < 40) {
+                    bot.angle = diffY > 0 ? 90 : 270;
+                    inSight = true;
+                } else if (Math.abs(diffY) < 40) {
+                    bot.angle = diffX > 0 ? 0 : 180;
+                    inSight = true;
+                }
+            } else {
+                // โหมดธรรมดา/ง่าย เล็งตรงๆ ธรรมดา
+                if (Math.abs(pCenterX - bCenterX) < 30 && ((bot.angle === 90 && pCenterY > bCenterY) || (bot.angle === 270 && pCenterY < bCenterY))) inSight = true;
+                if (Math.abs(pCenterY - bCenterY) < 30 && ((bot.angle === 0 && pCenterX > bCenterX) || (bot.angle === 180 && pCenterX < bCenterX))) inSight = true;
+            }
+
+            // ถ้าเห็นเป้าหมายหรือสุ่มยิงในโหมดยาก ให้ยิงเลย
+            if (inSight || (currentMode === 'hard' && Math.random() < 0.1)) {
+                shoot(bot);
+            }
+        }
+
+        // ลูปหลักของเกม
+        function gameLoop() {
+            // 1. ควบคุมผู้เล่น
+            let moveX = 0;
+            let moveY = 0;
+
+            if (keys['KeyA'] || keys['ArrowLeft']) { moveX = -player.speed; player.angle = 180; }
+            else if (keys['KeyD'] || keys['ArrowRight']) { moveX = player.speed; player.angle = 0; }
+            else if (keys['KeyW'] || keys['ArrowUp']) { moveY = -player.speed; player.angle = 270; }
+            else if (keys['KeyS'] || keys['ArrowDown']) { moveY = player.speed; player.angle = 90; }
+
+            if (moveX !== 0 && !checkCollision(player.x + moveX, player.y, player.size)) player.x += moveX;
+            if (moveY !== 0 && !checkCollision(player.x, player.y + moveY, player.size)) player.y += moveY;
+
+            // 2. อัปเดต บอท
+            updateBot();
+
+            // 3. อัปเดต กระสุน
+            for (let i = bullets.length - 1; i >= 0; i--) {
+                let b = bullets[i];
+                b.x += b.vx;
+                b.y += b.vy;
+
+                // ชนขอบแผนที่
+                if (b.x < 0 || b.x > canvas.width || b.y < 0 || b.y > canvas.height) {
+                    bullets.splice(i, 1);
+                    continue;
+                }
+
+                // ชนสิ่งกีดขวาง
+                let hitWall = false;
+                for (let obs of obstacles) {
+                    if (b.x > obs.x && b.x < obs.x + obs.w && b.y > obs.y && b.y < obs.y + obs.h) {
+                        createExplosion(b.x, b.y, '#555');
+                        bullets.splice(i, 1);
+                        hitWall = true;
+                        break;
+                    }
+                }
+                if (hitWall) continue;
+
+                // ชนผู้เล่น
+                if (b.owner === bot && b.x > player.x && b.x < player.x + player.size && b.y > player.y && b.y < player.y + player.size) {
+                    player.hp--;
+                    createExplosion(b.x, b.y, '#ff0000');
+                    playSound('hit');
+                    bullets.splice(i, 1);
+                    updateUI();
+                    if (player.hp <= 0) gameOver(false);
+                    continue;
+                }
+
+                // ชนบอท
+                if (b.owner === player && b.x > bot.x && b.x < bot.x + bot.size && b.y > bot.y && b.y < bot.y + bot.size) {
+                    bot.hp--;
+                    createExplosion(b.x, b.y, '#00ff00');
+                    playSound('hit');
+                    bullets.splice(i, 1);
+                    updateUI();
+                    if (bot.hp <= 0) gameOver(true);
+                    continue;
+                }
+            }
+
+            // อัปเดต เอฟเฟกต์ระเบิด
+            for (let i = particles.length - 1; i >= 0; i--) {
+                let p = particles[i];
+                p.x += p.vx;
+                p.y += p.vy;
+                p.life--;
+                if (p.life <= 0) particles.splice(i, 1);
+            }
+
+            // 4. วาดภาพกราฟิก (Render 8-Bit)
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // วาดสิ่งกีดขวาง (บล็อกอิฐสไตล์เรโทร)
+            ctx.fillStyle = '#994400';
+            for (let obs of obstacles) {
+                ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
+                // ลายเส้นอิฐ 8-bit
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+                ctx.beginPath();
+                ctx.moveTo(obs.x, obs.y + obs.h/2); ctx.lineTo(obs.x + obs.w, obs.y + obs.h/2);
+                ctx.moveTo(obs.x + obs.w/2, obs.y); ctx.lineTo(obs.x + obs.w/2, obs.y + obs.h/2);
+                ctx.moveTo(obs.x + obs.w/4, obs.y + obs.h/2); ctx.lineTo(obs.x + obs.w/4, obs.y + obs.h);
+                ctx.stroke();
+            }
+
+            // วาดรถถัง
+            drawTank(player);
+            drawTank(bot);
+
+            // วาดกระสุน
+            ctx.fillStyle = '#ffff00';
+            for (let b of bullets) {
+                ctx.fillRect(b.x - 3, b.y - 3, 6, 6);
+            }
+
+            // วาดเอฟเฟกต์ระเบิด
+            for (let p of particles) {
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x - p.size/2, p.y - p.size/2, p.size, p.size);
+            }
+        }
+
+        // ฟังก์ชันวาดรถถังพิกเซล
+        function drawTank(tank) {
+            ctx.save();
+            ctx.translate(tank.x + tank.size/2, tank.y + tank.size/2);
+            ctx.rotate((tank.angle * Math.PI) / 180);
+
+            // ตัวรถถังหลัก
+            ctx.fillStyle = tank.color;
+            ctx.fillRect(-12, -12, 24, 24);
+
+            // ตีนตะขาบซ้ายขวา
+            ctx.fillStyle = tank.trackColor;
+            ctx.fillRect(-16, -15, 32, 4);
+            ctx.fillRect(-16, 11, 32, 4);
+
+            // ป้อมปืนและกระบอกปืน
+            ctx.fillStyle = tank.color;
+            ctx.fillRect(-4, -4, 10, 8);
+            ctx.fillStyle = '#fff'; // ปลายกระบอกปืนไฮไลท์
+            ctx.fillRect(6, -2, 12, 4);
+
+            ctx.restore();
+        }
+
+        // จบเกม
+        function gameOver(playerWon) {
+            clearInterval(gameInterval);
+            playSound('gameover');
+            setTimeout(() => {
+                if (playerWon) {
+                    alert("ปาฏิหาริย์! คุณชนะบอทได้ยังไงเนี่ย!?");
+                } else {
+                    if(currentMode === 'hard') {
+                        alert("GAME OVER! บอกแล้วใช่ไหมว่าโหมดยากมันไม่มีทางชนะฮ่าๆๆ!");
+                    } else {
+                        alert("GAME OVER! พยายามใหม่อีกครั้งนะ!");
+                    }
+                }
+                // กลับหน้าเมนู
+                document.getElementById('menu').style.display = 'flex';
+                document.getElementById('game-container').style.display = 'none';
+                window.removeEventListener('keydown', handleKeyDown);
+                window.removeEventListener('keyup', handleKeyUp);
+                keys = {};
+            }, 100);
+        }
+    </script>
+</body>
+</html>
