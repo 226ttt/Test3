@@ -3,12 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>My Mobile Mario Game - Fixed</title>
+    <title>Super Hard 15 Stages Mario Game</title>
     <style>
         body {
             margin: 0;
             padding: 0;
-            background: #222;
+            background: #111;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -17,27 +17,26 @@
             color: white;
             font-family: Arial, sans-serif;
             overflow: hidden;
-            /* ป้องกันการเลือกข้อความและการเบราว์เซอร์เด้ง */
             user-select: none;
             -webkit-user-select: none;
             touch-action: none;
         }
         #ui {
-            font-size: 22px;
+            font-size: 24px;
             margin-bottom: 8px;
             font-weight: bold;
-            text-shadow: 1px 1px 2px #000;
+            text-shadow: 2px 2px 4px #000;
+            color: #ffcc00;
         }
         canvas {
-            background: #5c94fc; /* สีฟ้าสไตล์มารีโอ้ */
+            background: #4a75cd; /* สีฟ้าหม่นลงหน่อยให้ดูท้าทาย */
             border: 3px solid #fff;
             border-radius: 4px;
             max-width: 95vw;
             max-height: 45vh;
             aspect-ratio: 2 / 1;
-            box-shadow: 0px 4px 10px rgba(0,0,0,0.5);
+            box-shadow: 0px 4px 15px rgba(0,0,0,0.7);
         }
-        /* โซนปุ่มกดควบคุมแมตช์สรีระนิ้วมือ */
         #dpad {
             display: flex;
             justify-content: space-between;
@@ -67,7 +66,6 @@
             touch-action: none;
             box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
-        /* ไฮไลท์ปุ่มเมื่อถูกกดสัมผัส */
         .ctrl-btn.active-touch {
             background: rgba(255, 255, 255, 0.7);
             color: #000;
@@ -86,10 +84,9 @@
 </head>
 <body>
 
-    <div id="ui">STAGE: <span id="stage-num">1</span>/5</div>
+    <div id="ui">STAGE: <span id="stage-num">1</span>/15</div>
     <canvas id="gameCanvas" width="800" height="400"></canvas>
 
-    <!-- ปุ่มควบคุม Multi-touch สำหรับมือถือ -->
     <div id="dpad">
         <div class="btn-group">
             <div class="ctrl-btn" id="btn-left">◀</div>
@@ -120,10 +117,9 @@ const player = {
     color: "#ff2222"
 };
 
-// สถานะการกดปุ่ม
 const keys = { Left: false, Right: false, Jump: false };
 
-// โครงสร้างด่าน 1 - 5 (ด่าน 5 ปรับให้ยากสุดกวนเหมือนเดิม)
+// คลังด่านทั้งหมด 1 - 15 ด่าน
 const stages = {
     1: [
         { x: 0, y: 360, w: 800, h: 40, type: 'ground' },
@@ -161,14 +157,105 @@ const stages = {
         { x: 420, y: 160, w: 30, h: 10, type: 'ground' },
         { x: 620, y: 120, w: 30, h: 10, type: 'ground' }, 
         { x: 740, y: 40, w: 50, h: 80, type: 'door' }
+    ],
+    6: [
+        { x: 0, y: 360, w: 800, h: 40, type: 'ground' },
+        { x: 150, y: 270, w: 500, h: 20, type: 'ground' },
+        { x: 150, y: 290, w: 20, h: 70, type: 'spike' },
+        { x: 630, y: 290, w: 20, h: 70, type: 'spike' },
+        { x: 740, y: 190, w: 50, h: 80, type: 'door' }
+    ],
+    7: [
+        { x: 0, y: 360, w: 100, h: 40, type: 'ground' },
+        { x: 100, y: 360, w: 600, h: 40, type: 'spike' },
+        { x: 700, y: 360, w: 100, h: 40, type: 'ground' },
+        { x: 200, y: 250, w: 40, h: 20, type: 'ground' },
+        { x: 350, y: 180, w: 40, h: 20, type: 'ground' },
+        { x: 500, y: 250, w: 40, h: 20, type: 'ground' },
+        { x: 740, y: 280, w: 50, h: 80, type: 'door' }
+    ],
+    // --- ด่าน 8 ขึ้นไป: เริ่มขยับความยากแบบทารุณ ---
+    8: [
+        { x: 0, y: 360, w: 800, h: 40, type: 'ground' },
+        { x: 150, y: 0, w: 30, h: 300, type: 'spike' }, // กำแพงหนามดักด้านบน ต้องก้มหรือกระโดดเตี้ยๆ
+        { x: 350, y: 120, w: 30, h: 240, type: 'spike' }, 
+        { x: 550, y: 0, w: 30, h: 300, type: 'spike' },
+        { x: 740, y: 280, w: 50, h: 80, type: 'door' }
+    ],
+    9: [
+        { x: 0, y: 360, w: 100, h: 40, type: 'ground' },
+        { x: 100, y: 360, w: 700, h: 40, type: 'spike' }, // พื้นข้างล่างคือหนามล้วนๆ
+        { x: 140, y: 270, w: 20, h: 10, type: 'ground' }, // แท่นเหยียบขนาดจิ๋วเท่าเม็ดถั่ว
+        { x: 260, y: 220, w: 20, h: 10, type: 'ground' },
+        { x: 380, y: 170, w: 20, h: 10, type: 'ground' },
+        { x: 500, y: 220, w: 20, h: 10, type: 'ground' },
+        { x: 620, y: 270, w: 20, h: 10, type: 'ground' },
+        { x: 740, y: 280, w: 50, h: 80, type: 'door' }
+    ],
+    // --- ด่าน 10: "ไม่มีทางผ่านได้จริง" (หนามกั้นโลก ประตูลอยฟ้า) ---
+    10: [
+        { x: 0, y: 360, w: 100, h: 40, type: 'ground' },
+        { x: 100, y: 120, w: 700, h: 280, type: 'spike' }, // หนามสูงท่วมหัวยาวไปจนสุดจอ
+        { x: 740, y: 20, w: 50, h: 80, type: 'door' } // ประตูลอยอยู่ขวากลางอากาศ ไม่มีแท่นใดๆ ให้เหยียบ
+    ],
+    11: [
+        { x: 0, y: 360, w: 250, h: 40, type: 'ground' },
+        { x: 250, y: 360, w: 300, h: 40, type: 'spike' },
+        { x: 550, y: 360, w: 250, h: 40, type: 'ground' },
+        { x: 380, y: 230, w: 40, h: 10, type: 'ground' },
+        { x: 380, y: 130, w: 40, h: 10, type: 'spike' }, // ดักหัวคนกระโดดสูง
+        { x: 740, y: 280, w: 50, h: 80, type: 'door' }
+    ],
+    12: [
+        { x: 0, y: 360, w: 800, h: 40, type: 'ground' },
+        // เขาวงกตบีบช่องเดินแคบๆ พลาดนิดเดียวโดนหนามขนาบข้าง
+        { x: 150, y: 150, w: 30, h: 210, type: 'spike' },
+        { x: 150, y: 0, w: 30, h: 70, type: 'spike' },
+        { x: 300, y: 0, w: 30, h: 240, type: 'spike' },
+        { x: 450, y: 120, w: 30, h: 240, type: 'spike' },
+        { x: 600, y: 0, w: 30, h: 240, type: 'spike' },
+        { x: 740, y: 280, w: 50, h: 80, type: 'door' }
+    ],
+    13: [
+        { x: 0, y: 360, w: 150, h: 40, type: 'ground' },
+        { x: 150, y: 360, w: 500, h: 40, type: 'spike' },
+        { x: 650, y: 360, w: 150, h: 40, type: 'ground' },
+        // แท่นบันไดลวงตาที่ต้องใช้ความแม่นยำระดับพิกเซล
+        { x: 200, y: 280, w: 15, h: 10, type: 'ground' },
+        { x: 300, y: 220, w: 15, h: 10, type: 'ground' },
+        { x: 400, y: 160, w: 15, h: 10, type: 'ground' },
+        { x: 500, y: 220, w: 15, h: 10, type: 'ground' },
+        { x: 600, y: 280, w: 15, h: 10, type: 'ground' },
+        { x: 740, y: 280, w: 50, h: 80, type: 'door' }
+    ],
+    14: [
+        { x: 0, y: 360, w: 800, h: 40, type: 'ground' },
+        // อุโมงค์หนามเตี้ย ต้องอาศัยแรงเฉื่อยวิ่งสไลด์ (แต่เกมนี้สไลด์ไม่ได้ แปลว่าต้องกะจังหวะเดินสั้นมากๆ)
+        { x: 200, y: 0, w: 400, h: 290, type: 'spike' },
+        { x: 740, y: 280, w: 50, h: 80, type: 'door' }
+    ],
+    15: [
+        // ด่านสุดท้าย!
+        { x: 0, y: 360, w: 100, h: 40, type: 'ground' },
+        { x: 100, y: 360, w: 600, h: 40, type: 'spike' },
+        { x: 700, y: 360, w: 100, h: 40, type: 'ground' },
+        { x: 200, y: 250, w: 30, h: 10, type: 'ground' },
+        { x: 380, y: 180, w: 30, h: 10, type: 'spike' }, // แท่นหลอก แท้จริงแล้วเป็นหนาม!
+        { x: 550, y: 250, w: 30, h: 10, type: 'ground' },
+        { x: 740, y: 280, w: 50, h: 80, type: 'door' }
     ]
 };
 
-// --- คีย์บอร์ดสำหรับคอมพิวเตอร์ ---
 window.addEventListener("keydown", (e) => {
     if (e.key === "ArrowRight" || e.key === "d") keys.Right = true;
     if (e.key === "ArrowLeft" || e.key === "a") keys.Left = true;
     if (e.key === "ArrowUp" || e.key === " " || e.key === "w") keys.Jump = true;
+    
+    // 🤫 สูตรลับเฉพาะคุณ: ในด่าน 10 ถ้ากดปุ่ม 'p' จะวาร์ปข้ามกำแพงหนามไปหน้าประตูทันที!
+    if (e.key === "p" && currentStage === 10) {
+        player.x = 700;
+        player.y = 50;
+    }
 });
 window.addEventListener("keyup", (e) => {
     if (e.key === "ArrowRight" || e.key === "d") keys.Right = false;
@@ -176,7 +263,6 @@ window.addEventListener("keyup", (e) => {
     if (e.key === "ArrowUp" || e.key === " " || e.key === "w") keys.Jump = false;
 });
 
-// --- ระบบล็อคปุ่มสแกนนิ้วมือสัมผัส (Multi-touch Engine) ---
 const mappedButtons = [
     { id: "btn-left", key: "Left" },
     { id: "btn-right", key: "Right" },
@@ -184,17 +270,13 @@ const mappedButtons = [
 ];
 
 function processTouches(e) {
-    e.preventDefault(); // บล็อกระบบเลื่อนหน้าจอของมือถือดั้งเดิม
-    
-    // เคลียร์สถานะปุ่มเก่า
+    e.preventDefault();
     keys.Left = false;
     keys.Right = false;
     keys.Jump = false;
     
-    // เคลียร์คลาสแสดงผลปุ่มกดค้างเดิมออกทั้งหมดก่อน
     mappedButtons.forEach(b => document.getElementById(b.id).classList.remove("active-touch"));
 
-    // วนลูปอ่านค่านิ้วทั้งหมดที่แตะค้างอยู่บนจอในเสี้ยววินาทีนั้น
     for (let i = 0; i < e.touches.length; i++) {
         const touch = e.touches[i];
         
@@ -202,24 +284,27 @@ function processTouches(e) {
             const btnEl = document.getElementById(btnInfo.id);
             const position = btnEl.getBoundingClientRect();
             
-            // เช็คขอบเขตพื้นที่ว่า นิ้วกำลังทับอยู่บนพื้นที่ปุ่มหรือไม่
             if (touch.clientX >= position.left && touch.clientX <= position.right &&
                 touch.clientY >= position.top && touch.clientY <= position.bottom) {
                 
                 keys[btnInfo.key] = true;
-                btnEl.classList.add("active-touch"); // แสดงเอฟเฟกต์ปุ่มโดนกด
+                btnEl.classList.add("active-touch");
             }
         });
+        
+        // 🤫 สูตรลับมือถือ: ในด่าน 10 ถ้าใช้นิ้วที่ 3 แตะที่บริเวณ "มุมซ้ายบนสุดของจอ" จะวาร์ปผ่านหนามทันที!
+        if (currentStage === 10 && touch.clientX < 60 && touch.clientY < 60) {
+            player.x = 700;
+            player.y = 50;
+        }
     }
 }
 
-// ผูกระบบสัมผัสเข้ากับพื้นที่ควบคุม dpad ทั้งหมด
 const dpadArea = document.getElementById("dpad");
 dpadArea.addEventListener("touchstart", processTouches, { passive: false });
 dpadArea.addEventListener("touchmove", processTouches, { passive: false });
 dpadArea.addEventListener("touchend", processTouches, { passive: false });
 dpadArea.addEventListener("touchcancel", processTouches, { passive: false });
-
 
 function resetPlayer() {
     player.x = 50;
@@ -263,13 +348,14 @@ function update() {
             player.y + player.height > block.y) {
             
             if (block.type === 'door') {
-                if (currentStage < 5) {
+                if (currentStage < 15) {
                     currentStage++;
                     document.getElementById("stage-num").innerText = currentStage;
                     alert(`🎉 ยินดีด้วย! ผ่านเข้าสู่ด่าน ${currentStage}`);
                     resetPlayer();
                 } else {
-                    alert("🏆 บ้าน่า!! คุณผ่านด่าน 5 ที่เป็นไปไม่ได้สำเร็จ!?");
+                    // ข้อความเมื่อเคลียร์ด่าน 15 (ด่านสุดท้าย) สำเร็จตามเงื่อนไข
+                    alert("🏆 ชนะแล้ว!!! คุณคือสุดยอดเกมเมอร์ผู้พิชิตด่านมหาโหดได้สำเร็จ!");
                     currentStage = 1;
                     document.getElementById("stage-num").innerText = currentStage;
                     resetPlayer();
@@ -291,6 +377,11 @@ function update() {
                 }
             }
         }
+    }
+
+    // แอบใส่เงื่อนไขพิเศษ: ถ้าผู้เล่นหาทางผ่านด่าน 10 ไปได้จริงๆ โดยไม่ใช้สูตร (เช่น บั๊กหลุดขอบ) ให้ขึ้นข้อความชนะหรือผ่านด่านด้วย
+    if (currentStage === 10 && player.x > 730 && player.y < 120) {
+        alert("🏆 ชนะแล้ว! คุณผ่านด่าน 10 ที่ไม่มีทางผ่านได้! คุณมันปีศาจ!");
     }
 
     if (player.x < 0) player.x = 0;
