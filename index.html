@@ -2,11 +2,18 @@
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>8-Bit Tank Battle VS BOT</title>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
         
+        * {
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+        }
+
         body {
             background-color: #111;
             color: #fff;
@@ -18,13 +25,15 @@
             min-height: 100vh;
             margin: 0;
             overflow: hidden;
+            padding: 10px;
         }
 
         h1 {
-            font-size: 24px;
-            margin-bottom: 10px;
+            font-size: 20px;
+            margin: 5px 0 10px 0;
             color: #00ff00;
-            text-shadow: 3px 3px #005500;
+            text-shadow: 2px 2px #005500;
+            text-align: center;
         }
 
         #menu {
@@ -33,20 +42,22 @@
             align-items: center;
             gap: 15px;
             background: #222;
-            padding: 30px;
+            padding: 25px;
             border: 4px solid #fff;
             box-shadow: 0 0 20px rgba(0,255,0,0.2);
+            z-index: 10;
+            max-width: 90%;
         }
 
         button {
             font-family: 'Press Start 2P', cursive;
-            font-size: 14px;
-            padding: 12px 24px;
+            font-size: 12px;
+            padding: 12px 20px;
             border: 4px solid #fff;
             background: #000;
             color: #fff;
             cursor: pointer;
-            width: 250px;
+            width: 240px;
             transition: 0.1s;
         }
 
@@ -67,28 +78,113 @@
         #game-container {
             display: none;
             position: relative;
+            width: 100%;
+            max-width: 600px;
+        }
+
+        #canvas-wrapper {
+            width: 100%;
+            aspect-ratio: 6 / 5;
+            position: relative;
         }
 
         canvas {
             background: #000;
-            border: 6px solid #555;
-            box-shadow: 0 0 30px rgba(255,255,255,0.1);
+            border: 4px solid #555;
+            box-shadow: 0 0 20px rgba(255,255,255,0.1);
+            width: 100%;
+            height: 100%;
+            display: block;
         }
 
         #ui {
             display: flex;
             justify-content: space-between;
-            width: 600px;
-            margin-bottom: 10px;
-            font-size: 12px;
+            width: 100%;
+            margin-bottom: 8px;
+            font-size: 10px;
+        }
+
+        /* ปุ่มจอยสติ๊กบนมือถือ */
+        #mobile-controls {
+            display: none; /* ซ่อนไว้ก่อน จะเปิดเมื่อเป็นจอสัมผัส */
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            max-width: 500px;
+            margin-top: 15px;
+            padding: 0 10px;
+        }
+
+        .dpad {
+            display: grid;
+            grid-template-columns: repeat(3, 45px);
+            grid-template-rows: repeat(3, 45px);
+            gap: 3px;
+        }
+
+        .dpad-btn {
+            background: #333;
+            border: 3px solid #777;
+            border-radius: 5px;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: bold;
+            active-background: #555;
+        }
+        .dpad-btn:active {
+            background: #666;
+            border-color: #fff;
+        }
+        .dpad-up { grid-column: 2; grid-row: 1; }
+        .dpad-left { grid-column: 1; grid-row: 2; }
+        .dpad-right { grid-column: 3; grid-row: 2; }
+        .dpad-down { grid-column: 2; grid-row: 3; }
+
+        .action-container {
+            display: flex;
+            align-items: center;
+        }
+
+        .fire-btn {
+            width: 75px;
+            height: 75px;
+            background: #a00;
+            border: 4px solid #ff5555;
+            border-radius: 50%;
+            color: #fff;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 10px;
+            box-shadow: 0 4px #500;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .fire-btn:active {
+            background: #ff0000;
+            transform: translateY(3px);
+            box-shadow: 0 1px #500;
         }
 
         .controls-hint {
-            margin-top: 15px;
-            font-size: 10px;
-            color: #888;
+            margin-top: 10px;
+            font-size: 8px;
+            color: #666;
             text-align: center;
-            line-height: 1.6;
+            line-height: 1.4;
+        }
+
+        /* ตรวจจับว่าเป็นอุปกรณ์พกพา/จอสัมผัส */
+        @media (pointer: coarse) {
+            #mobile-controls {
+                display: flex;
+            }
+            .controls-hint {
+                display: none; /* ซ่อนคำแนะนำคีย์บอร์ดบนมือถือ */
+            }
         }
     </style>
 </head>
@@ -98,7 +194,7 @@
 
     <!-- หน้าเมนูเลือกโหมด -->
     <div id="menu">
-        <p style="margin-top:0; font-size:14px; color:#aaa;">CHOOSE DIFFICULTY</p>
+        <p style="margin-top:0; font-size:12px; color:#aaa; text-align:center;">CHOOSE DIFFICULTY</p>
         <button onclick="startGame('easy')">EASY</button>
         <button onclick="startGame('normal')">NORMAL</button>
         <button class="hard-mode" onclick="startGame('hard')">HARD (IMPOSSIBLE)</button>
@@ -111,7 +207,23 @@
             <div id="mode-text" style="color: #ff0000;"></div>
             <div id="bot-hp">BOT: HP 3</div>
         </div>
-        <canvas id="gameCanvas" width="600" height="500"></canvas>
+        <div id="canvas-wrapper">
+            <canvas id="gameCanvas" width="600" height="500"></canvas>
+        </div>
+        
+        <!-- แผงควบคุมบนมือถือ -->
+        <div id="mobile-controls">
+            <div class="dpad">
+                <div class="dpad-btn dpad-up" id="btn-up">▲</div>
+                <div class="dpad-btn dpad-left" id="btn-left">◀</div>
+                <div class="dpad-btn dpad-right" id="btn-right">▶</div>
+                <div class="dpad-btn dpad-down" id="btn-down">▼</div>
+            </div>
+            <div class="action-container">
+                <div class="fire-btn" id="btn-fire">FIRE</div>
+            </div>
+        </div>
+
         <div class="controls-hint">
             [W,A,S,D] หรือ [ปุ่มลูกศร] เพื่อเคลื่อนที่<br>
             [SPACEBAR] เพื่อยิงกระสุน
@@ -122,8 +234,14 @@
         const canvas = document.getElementById('gameCanvas');
         const ctx = canvas.getContext('2d');
         
-        // ตั้งค่าระบบเสียง 8-bit ด้วย Web Audio API
-        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        // ระบบเสียง 8-bit
+        let audioCtx = null;
+        function initAudio() {
+            if (!audioCtx) {
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            }
+        }
+
         function playSound(type) {
             if (!audioCtx) return;
             const osc = audioCtx.createOscillator();
@@ -135,21 +253,21 @@
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(300, audioCtx.currentTime);
                 osc.frequency.exponentialRampToValueAtTime(40, audioCtx.currentTime + 0.1);
-                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.2, audioCtx.currentTime);
                 gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.1);
                 osc.start(); osc.stop(audioCtx.currentTime + 0.1);
             } else if (type === 'hit') {
                 osc.type = 'square';
                 osc.frequency.setValueAtTime(100, audioCtx.currentTime);
                 osc.frequency.linearRampToValueAtTime(10, audioCtx.currentTime + 0.2);
-                gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
                 gain.gain.linearRampToValueAtTime(0.01, audioCtx.currentTime + 0.2);
                 osc.start(); osc.stop(audioCtx.currentTime + 0.2);
             } else if (type === 'gameover') {
                 osc.type = 'sawtooth';
                 osc.frequency.setValueAtTime(150, audioCtx.currentTime);
                 osc.frequency.linearRampToValueAtTime(30, audioCtx.currentTime + 0.5);
-                gain.gain.setValueAtTime(0.5, audioCtx.currentTime);
+                gain.gain.setValueAtTime(0.4, audioCtx.currentTime);
                 osc.start(); osc.stop(audioCtx.currentTime + 0.5);
             }
         }
@@ -161,7 +279,7 @@
         let bullets = [];
         let particles = [];
 
-        // สิ่งกีดขวาง (กำแพงอิฐ)
+        // สิ่งกีดขวาง
         const obstacles = [
             {x: 120, y: 120, w: 60, h: 60},
             {x: 420, y: 120, w: 60, h: 60},
@@ -183,39 +301,39 @@
 
         // เริ่มเกม
         function startGame(mode) {
+            initAudio(); // เรียกใช้งานระบบเสียงเมื่อมีการกดปุ่มครั้งแรก (ตามกฎเบราว์เซอร์)
             currentMode = mode;
             document.getElementById('menu').style.display = 'none';
             document.getElementById('game-container').style.display = 'block';
             
-            // ตั้งค่าบอทตามระดับความยาก
             if (mode === 'easy') {
                 bot.hp = 3; bot.speed = 2; bot.cooldown = 1200;
-                document.getElementById('mode-text').innerText = "MODE: EASY";
+                document.getElementById('mode-text').innerText = "EASY";
                 document.getElementById('mode-text').style.color = "#00ff00";
             } else if (mode === 'normal') {
                 bot.hp = 4; bot.speed = 2.5; bot.cooldown = 800;
-                document.getElementById('mode-text').innerText = "MODE: NORMAL";
+                document.getElementById('mode-text').innerText = "NORMAL";
                 document.getElementById('mode-text').style.color = "#ffff00";
             } else if (mode === 'hard') {
-                // บอทโหมดยาก: เลือดเยอะมาก เดินเร็ว ยิงรัวไม่มีคูลดาวน์
                 bot.hp = 10; 
                 bot.speed = 4.5; 
                 bot.cooldown = 150; 
-                document.getElementById('mode-text').innerText = "MODE: IMPOSSIBLE";
+                document.getElementById('mode-text').innerText = "IMPOSSIBLE";
                 document.getElementById('mode-text').style.color = "#ff0000";
             }
 
-            // รีเซ็ตสถานะตัวละคร
             player.hp = 3; player.x = 50; player.y = 220; player.angle = 0;
             bot.x = 510; bot.y = 220; bot.angle = 180;
             bullets = []; particles = [];
             updateUI();
 
-            // เปิดระบบตรวจจับปุ่มกด
+            // คีย์บอร์ดคอมพิวเตอร์
             window.addEventListener('keydown', handleKeyDown);
             window.addEventListener('keyup', handleKeyUp);
 
-            // รันลูปเกมที่ 60 เฟรมต่อวินาที
+            // ตั้งค่าปุ่มสัมผัสมือถือ
+            setupMobileControls();
+
             if (gameInterval) clearInterval(gameInterval);
             gameInterval = setInterval(gameLoop, 1000 / 60);
         }
@@ -232,18 +350,49 @@
         }
         function handleKeyUp(e) { keys[e.code] = false; }
 
+        // ผูกอีเวนต์ปุ่มกดบนหน้าจอมือถือ
+        function setupMobileControls() {
+            const bindTouch = (elementId, keyCode) => {
+                const el = document.getElementById(elementId);
+                
+                // สัมผัสเริ่มเดิน
+                el.addEventListener('touchstart', (e) => {
+                    e.preventDefault();
+                    initAudio();
+                    keys[keyCode] = true;
+                }, {passive: false});
+                
+                // ยกนิ้วออกให้หยุดเดิน
+                el.addEventListener('touchend', (e) => {
+                    e.preventDefault();
+                    keys[keyCode] = false;
+                }, {passive: false});
+            };
+
+            bindTouch('btn-up', 'ArrowUp');
+            bindTouch('btn-down', 'ArrowDown');
+            bindTouch('btn-left', 'ArrowLeft');
+            bindTouch('btn-right', 'ArrowRight');
+
+            // ปุ่มยิงบนมือถือ
+            document.getElementById('btn-fire').addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                initAudio();
+                shoot(player);
+            }, {passive: false});
+        }
+
         function updateUI() {
             document.getElementById('player-hp').innerText = `PLAYER: HP ${player.hp}`;
             document.getElementById('bot-hp').innerText = `BOT: HP ${bot.hp}`;
         }
 
-        // ฟังก์ชันการยิงกระสุน
         function shoot(tank) {
             let now = Date.now();
             if (now - tank.lastShot < tank.cooldown) return;
             
             let rad = (tank.angle * Math.PI) / 180;
-            let bSpeed = currentMode === 'hard' && tank === bot ? 9 : 6; // กระสุนบอทโหมดยากจะเร็วเป็นพิเศษ
+            let bSpeed = currentMode === 'hard' && tank === bot ? 9 : 6;
             
             bullets.push({
                 x: tank.x + tank.size/2 + Math.cos(rad) * (tank.size/2),
@@ -257,7 +406,6 @@
             playSound('shoot');
         }
 
-        // ตรวจสอบการชนขอบสนาม/ชนกำแพง/ชนรถถังอีกคัน
         function checkCollision(x, y, size, isBot=false) {
             if (x < 0 || x + size > canvas.width || y < 0 || y + size > canvas.height) return true;
             
@@ -276,7 +424,6 @@
             return false;
         }
 
-        // เอฟเฟกต์ระเบิดพิกเซล
         function createExplosion(x, y, color) {
             for (let i = 0; i < 12; i++) {
                 particles.push({
@@ -290,7 +437,6 @@
             }
         }
 
-        // ระบบสมองกล (AI) ของบอท
         function updateBot() {
             let now = Date.now();
             
@@ -299,7 +445,7 @@
             let bCenterX = bot.x + bot.size/2;
             let bCenterY = bot.y + bot.size/2;
 
-            // [ระบบโกงโหมดยาก] 1. ระบบหลบกระสุนอัตโนมัติ (Auto-Evade)
+            // โหมดยาก: หลบกระสุนอัตโนมัติ
             if (currentMode === 'hard') {
                 for (let b of bullets) {
                     if (b.owner === player) {
@@ -316,7 +462,7 @@
                 }
             }
 
-            // ระบบเดินของบอท
+            // การเดินของบอท
             if (now - bot.lastDirChange > (currentMode === 'hard' ? 200 : 800)) {
                 bot.lastDirChange = now;
                 
@@ -351,10 +497,8 @@
                 bot.lastDirChange = 0; 
             }
 
-            // ระบบส่องเป้าหมายและสั่งยิง
+            // โหมดยาก: ระบบทำนายวิถีกระสุนยิงดักหน้า
             let inSight = false;
-
-            // [ระบบโกงโหมดยาก] 2. ยิงดักหน้าล่วงหน้า (Prediction Aim)
             if (currentMode === 'hard') {
                 let pVx = 0, pVy = 0;
                 if (keys['KeyA'] || keys['ArrowLeft']) pVx = -player.speed;
@@ -362,10 +506,8 @@
                 if (keys['KeyW'] || keys['ArrowUp']) pVy = -player.speed;
                 if (keys['KeyS'] || keys['ArrowDown']) pVy = player.speed;
 
-                // คำนวณตำแหน่งผู้เล่นล่วงหน้าไป 15 เฟรม
                 let predX = pCenterX + pVx * 15;
                 let predY = pCenterY + pVy * 15;
-
                 let diffX = predX - bCenterX;
                 let diffY = predY - bCenterY;
 
@@ -377,7 +519,6 @@
                     inSight = true;
                 }
             } else {
-                // ระบบเล็งยิงตรงๆ สำหรับโหมดง่ายและปกติ
                 if (Math.abs(pCenterX - bCenterX) < 30 && ((bot.angle === 90 && pCenterY > bCenterY) || (bot.angle === 270 && pCenterY < bCenterY))) inSight = true;
                 if (Math.abs(pCenterY - bCenterY) < 30 && ((bot.angle === 0 && pCenterX > bCenterX) || (bot.angle === 180 && pCenterX < bCenterX))) inSight = true;
             }
@@ -387,12 +528,11 @@
             }
         }
 
-        // ลูปประมวลผลหลักของเกม
         function gameLoop() {
-            // 1. ตรวจสอบปุ่มกดและขยับผู้เล่น
             let moveX = 0;
             let moveY = 0;
 
+            // ตรวจสอบทั้งปุ่ม WASD และ ปุ่มลูกศร (รวมถึงปุ่มกดบนมือถือด้วย)
             if (keys['KeyA'] || keys['ArrowLeft']) { moveX = -player.speed; player.angle = 180; }
             else if (keys['KeyD'] || keys['ArrowRight']) { moveX = player.speed; player.angle = 0; }
             else if (keys['KeyW'] || keys['ArrowUp']) { moveY = -player.speed; player.angle = 270; }
@@ -401,10 +541,9 @@
             if (moveX !== 0 && !checkCollision(player.x + moveX, player.y, player.size)) player.x += moveX;
             if (moveY !== 0 && !checkCollision(player.x, player.y + moveY, player.size)) player.y += moveY;
 
-            // 2. อัปเดต บอท
             updateBot();
 
-            // 3. คำนวณวิถีกระสุนและการชนเป้าหมาย
+            // อัปเดตกระสุน
             for (let i = bullets.length - 1; i >= 0; i--) {
                 let b = bullets[i];
                 b.x += b.vx;
@@ -447,7 +586,7 @@
                 }
             }
 
-            // อัปเดตเอฟเฟกต์สะเก็ดระเบิด
+            // อัปเดตเอฟเฟกต์ระเบิด
             for (let i = particles.length - 1; i >= 0; i--) {
                 let p = particles[i];
                 p.x += p.vx;
@@ -456,16 +595,17 @@
                 if (p.life <= 0) particles.splice(i, 1);
             }
 
-            // 4. วาดภาพกราฟิกทั้งหมดลงจอคอมพิวเตอร์
+            // เรนเดอร์กราฟิก
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // วาดบล็อกกำแพงอิฐ 8-bit
+            // วาดบล็อกอิฐ
             ctx.fillStyle = '#994400';
             for (let obs of obstacles) {
                 ctx.fillRect(obs.x, obs.y, obs.w, obs.h);
                 ctx.strokeStyle = '#000';
                 ctx.lineWidth = 2;
                 ctx.strokeRect(obs.x, obs.y, obs.w, obs.h);
+                ctx.beginTransaction;
                 ctx.beginPath();
                 ctx.moveTo(obs.x, obs.y + obs.h/2); ctx.lineTo(obs.x + obs.w, obs.y + obs.h/2);
                 ctx.moveTo(obs.x + obs.w/2, obs.y); ctx.lineTo(obs.x + obs.w/2, obs.y + obs.h/2);
@@ -473,7 +613,6 @@
                 ctx.stroke();
             }
 
-            // วาดรถถังผู้เล่นและบอท
             drawTank(player);
             drawTank(bot);
 
@@ -490,22 +629,18 @@
             }
         }
 
-        // ฟังก์ชันวาดลายพิกเซลของรถถัง
         function drawTank(tank) {
             ctx.save();
             ctx.translate(tank.x + tank.size/2, tank.y + tank.size/2);
             ctx.rotate((tank.angle * Math.PI) / 180);
 
-            // ตัวรถถังหลัก
             ctx.fillStyle = tank.color;
             ctx.fillRect(-12, -12, 24, 24);
 
-            // ตีนตะขาบ
             ctx.fillStyle = tank.trackColor;
             ctx.fillRect(-16, -15, 32, 4);
             ctx.fillRect(-16, 11, 32, 4);
 
-            // ป้อมปืนและกระบอกปืน
             ctx.fillStyle = tank.color;
             ctx.fillRect(-4, -4, 10, 8);
             ctx.fillStyle = '#fff'; 
@@ -514,18 +649,17 @@
             ctx.restore();
         }
 
-        // สิ้นสุดเกม
         function gameOver(playerWon) {
             clearInterval(gameInterval);
             playSound('gameover');
             setTimeout(() => {
                 if (playerWon) {
-                    alert("ปาฏิหาริย์! คุณชนะบอทโหมดนี้ได้ยังไงเนี่ย!?");
+                    alert("ปาฏิหาริย์! คุณโค่นบอทโหมดนี้ลงได้บนหน้าจอมือถือ!?");
                 } else {
                     if(currentMode === 'hard') {
-                        alert("GAME OVER! บอทคำนวณล่วงหน้า + วาร์ปหลบขนาดนี้ เล่นยังไงก็ไม่ชนะหรอกฮ่าๆๆ!");
+                        alert("GAME OVER! ขนาดใช้จอยสติ๊กยังเอาชนะบอทล็อคเป้าและวาร์ปหลบตัวนี้ไม่ได้เลย!");
                     } else {
-                        alert("GAME OVER! พยายามใหม่อีกครั้งนะ!");
+                        alert("GAME OVER! ลองใหม่อีกครั้งนะครับ!");
                     }
                 }
                 document.getElementById('menu').style.display = 'flex';
