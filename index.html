@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>My Mobile Mario Game</title>
+    <title>My Mobile Mario Game - Fixed</title>
     <style>
         body {
             margin: 0;
@@ -17,57 +17,70 @@
             color: white;
             font-family: Arial, sans-serif;
             overflow: hidden;
+            /* ป้องกันการเลือกข้อความและการเบราว์เซอร์เด้ง */
             user-select: none;
             -webkit-user-select: none;
+            touch-action: none;
         }
         #ui {
-            font-size: 20px;
-            margin-bottom: 5px;
+            font-size: 22px;
+            margin-bottom: 8px;
             font-weight: bold;
+            text-shadow: 1px 1px 2px #000;
         }
         canvas {
-            background: #5c94fc;
-            border: 2px solid #fff;
+            background: #5c94fc; /* สีฟ้าสไตล์มารีโอ้ */
+            border: 3px solid #fff;
+            border-radius: 4px;
             max-width: 95vw;
-            max-height: 50vh;
+            max-height: 45vh;
             aspect-ratio: 2 / 1;
+            box-shadow: 0px 4px 10px rgba(0,0,0,0.5);
         }
-        /* โซนปุ่มกดบนมือถือ */
+        /* โซนปุ่มกดควบคุมแมตช์สรีระนิ้วมือ */
         #dpad {
             display: flex;
             justify-content: space-between;
             width: 95vw;
             max-width: 600px;
-            margin-top: 15px;
+            margin-top: 20px;
             padding: 10px;
+            box-sizing: border-box;
+            touch-action: none;
         }
         .btn-group {
             display: flex;
-            gap: 10px;
+            gap: 15px;
         }
         .ctrl-btn {
-            width: 65px;
-            height: 65px;
-            background: rgba(255, 255, 255, 0.2);
+            width: 75px;
+            height: 75px;
+            background: rgba(255, 255, 255, 0.25);
             border: 3px solid #fff;
             border-radius: 50%;
             color: white;
-            font-size: 24px;
+            font-size: 28px;
             font-weight: bold;
             display: flex;
             align-items: center;
             justify-content: center;
-            touch-action: manipulation;
+            touch-action: none;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
         }
-        .ctrl-btn:active {
-            background: rgba(255, 255, 255, 0.6);
+        /* ไฮไลท์ปุ่มเมื่อถูกกดสัมผัส */
+        .ctrl-btn.active-touch {
+            background: rgba(255, 255, 255, 0.7);
             color: #000;
+            transform: scale(0.95);
         }
         #btn-jump {
-            background: rgba(255, 85, 85, 0.4);
-            width: 75px;
-            height: 75px;
-            border-radius: 50%;
+            background: rgba(255, 85, 85, 0.5);
+            width: 85px;
+            height: 85px;
+            font-size: 32px;
+        }
+        #btn-jump.active-touch {
+            background: rgba(255, 85, 85, 0.9);
         }
     </style>
 </head>
@@ -76,7 +89,7 @@
     <div id="ui">STAGE: <span id="stage-num">1</span>/5</div>
     <canvas id="gameCanvas" width="800" height="400"></canvas>
 
-    <!-- ปุ่มควบคุมสำหรับมือถือ -->
+    <!-- ปุ่มควบคุม Multi-touch สำหรับมือถือ -->
     <div id="dpad">
         <div class="btn-group">
             <div class="ctrl-btn" id="btn-left">◀</div>
@@ -107,10 +120,10 @@ const player = {
     color: "#ff2222"
 };
 
-// เก็บสถานะปุ่มกด (รองรับทั้งคอมและมือถือ)
+// สถานะการกดปุ่ม
 const keys = { Left: false, Right: false, Jump: false };
 
-// โครงสร้างด่าน 1 - 5
+// โครงสร้างด่าน 1 - 5 (ด่าน 5 ปรับให้ยากสุดกวนเหมือนเดิม)
 const stages = {
     1: [
         { x: 0, y: 360, w: 800, h: 40, type: 'ground' },
@@ -140,12 +153,10 @@ const stages = {
         { x: 740, y: 70, w: 50, h: 80, type: 'door' }
     ],
     5: [ 
-        // ด่าน 5: มหาโหด (ระยะกระโดดถูกคำนวณให้กว้างเกินไปจนผ่านไม่ได้ในทางปกติ)
         { x: 0, y: 360, w: 150, h: 40, type: 'ground' },
         { x: 250, y: 360, w: 80, h: 40, type: 'ground' },
         { x: 150, y: 360, w: 100, h: 40, type: 'spike' },
         { x: 330, y: 360, w: 470, h: 40, type: 'spike' },
-        // แท่นลอยที่ไกลเกินเอื้อม
         { x: 230, y: 240, w: 30, h: 10, type: 'ground' },
         { x: 420, y: 160, w: 30, h: 10, type: 'ground' },
         { x: 620, y: 120, w: 30, h: 10, type: 'ground' }, 
@@ -153,7 +164,7 @@ const stages = {
     ]
 };
 
-// --- ระบบควบคุมบนคอมพิวเตอร์ (คีย์บอร์ด) ---
+// --- คีย์บอร์ดสำหรับคอมพิวเตอร์ ---
 window.addEventListener("keydown", (e) => {
     if (e.key === "ArrowRight" || e.key === "d") keys.Right = true;
     if (e.key === "ArrowLeft" || e.key === "a") keys.Left = true;
@@ -165,15 +176,49 @@ window.addEventListener("keyup", (e) => {
     if (e.key === "ArrowUp" || e.key === " " || e.key === "w") keys.Jump = false;
 });
 
-// --- ระบบควบคุมบนมือถือ (Touch Events) ---
-function setupMobileButton(id, keyName) {
-    const btn = document.getElementById(id);
-    btn.addEventListener("touchstart", (e) => { e.preventDefault(); keys[keyName] = true; });
-    btn.addEventListener("touchend", (e) => { e.preventDefault(); keys[keyName] = false; });
+// --- ระบบล็อคปุ่มสแกนนิ้วมือสัมผัส (Multi-touch Engine) ---
+const mappedButtons = [
+    { id: "btn-left", key: "Left" },
+    { id: "btn-right", key: "Right" },
+    { id: "btn-jump", key: "Jump" }
+];
+
+function processTouches(e) {
+    e.preventDefault(); // บล็อกระบบเลื่อนหน้าจอของมือถือดั้งเดิม
+    
+    // เคลียร์สถานะปุ่มเก่า
+    keys.Left = false;
+    keys.Right = false;
+    keys.Jump = false;
+    
+    // เคลียร์คลาสแสดงผลปุ่มกดค้างเดิมออกทั้งหมดก่อน
+    mappedButtons.forEach(b => document.getElementById(b.id).classList.remove("active-touch"));
+
+    // วนลูปอ่านค่านิ้วทั้งหมดที่แตะค้างอยู่บนจอในเสี้ยววินาทีนั้น
+    for (let i = 0; i < e.touches.length; i++) {
+        const touch = e.touches[i];
+        
+        mappedButtons.forEach(btnInfo => {
+            const btnEl = document.getElementById(btnInfo.id);
+            const position = btnEl.getBoundingClientRect();
+            
+            // เช็คขอบเขตพื้นที่ว่า นิ้วกำลังทับอยู่บนพื้นที่ปุ่มหรือไม่
+            if (touch.clientX >= position.left && touch.clientX <= position.right &&
+                touch.clientY >= position.top && touch.clientY <= position.bottom) {
+                
+                keys[btnInfo.key] = true;
+                btnEl.classList.add("active-touch"); // แสดงเอฟเฟกต์ปุ่มโดนกด
+            }
+        });
+    }
 }
-setupMobileButton("btn-left", "Left");
-setupMobileButton("btn-right", "Right");
-setupMobileButton("btn-jump", "Jump");
+
+// ผูกระบบสัมผัสเข้ากับพื้นที่ควบคุม dpad ทั้งหมด
+const dpadArea = document.getElementById("dpad");
+dpadArea.addEventListener("touchstart", processTouches, { passive: false });
+dpadArea.addEventListener("touchmove", processTouches, { passive: false });
+dpadArea.addEventListener("touchend", processTouches, { passive: false });
+dpadArea.addEventListener("touchcancel", processTouches, { passive: false });
 
 
 function resetPlayer() {
@@ -184,7 +229,6 @@ function resetPlayer() {
 }
 
 function update() {
-    // อัปเดตความเร็วตามปุ่มที่กด
     if (keys.Right) {
         player.vx = player.speed;
     } else if (keys.Left) {
@@ -202,7 +246,6 @@ function update() {
     player.x += player.vx;
     player.y += player.vy;
 
-    // ตกเหว
     if (player.y > canvas.height) {
         alert("💥 ตกเหว! เริ่มด่านนี้ใหม่นะ");
         resetPlayer();
@@ -223,10 +266,10 @@ function update() {
                 if (currentStage < 5) {
                     currentStage++;
                     document.getElementById("stage-num").innerText = currentStage;
-                    alert(`🎉 เยินดีด้วย! ผ่านเข้าสู่ด่าน ${currentStage}`);
+                    alert(`🎉 ยินดีด้วย! ผ่านเข้าสู่ด่าน ${currentStage}`);
                     resetPlayer();
                 } else {
-                    alert("🏆 บ้าน่า!! คุณผ่านด่าน 5 ได้ยังไงกัน!?");
+                    alert("🏆 บ้าน่า!! คุณผ่านด่าน 5 ที่เป็นไปไม่ได้สำเร็จ!?");
                     currentStage = 1;
                     document.getElementById("stage-num").innerText = currentStage;
                     resetPlayer();
